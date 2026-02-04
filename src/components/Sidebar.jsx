@@ -28,7 +28,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
                 </div>
 
                 <div style={styles.navItem}>
-                    <span>📅</span> 예약자
+                    <span>📅</span> 당일 예약자
                 </div>
             </nav>
             <div style={styles.footer}>
