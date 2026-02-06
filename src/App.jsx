@@ -2,117 +2,210 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import PatientList from './components/PatientList';
-import PatientRegistration from './components/PatientRegistration';
 import MedicalRecord from './components/MedicalRecord';
-
-// 초기 더미 데이터
-const initialPatients = [
-    { id: 'P001', name: '김지아', gender: 'female', birthDate: '1996-05-15', phone: '010-1234-5678', address: '서울특별시 강남구 테헤란로 123', detailAddress: '101동 1001호', zipCode: '06234', lastVisit: '2024-01-20' },
-    { id: 'P002', name: '이민수', gender: 'male', birthDate: '1979-08-22', phone: '010-9876-5432', address: '서울특별시 서초구 반포대로 45', detailAddress: '202동 502호', zipCode: '06578', lastVisit: '2024-01-28' },
-    { id: 'P003', name: '박철수', gender: 'male', birthDate: '1992-03-10', phone: '010-5555-4444', address: '경기도 성남시 분당구 판교역로 166', detailAddress: '판교타워 15층', zipCode: '13529', lastVisit: '2024-01-15' },
-    { id: 'P004', name: '최유진', gender: 'female', birthDate: '1985-11-30', phone: '010-8888-7777', address: '서울특별시 마포구 홍대입구역로 12', detailAddress: '3층', zipCode: '04066', lastVisit: '2024-01-10' },
-    { id: 'P005', name: '정현우', gender: 'male', birthDate: '1972-07-08', phone: '010-2222-3333', address: '인천광역시 연수구 센트럴로 194', detailAddress: '송도타워 2201호', zipCode: '21984', lastVisit: '2024-01-05' },
-];
+import PatientRegistration from './components/PatientRegistration';
+import ProfileEdit from './components/ProfileEdit';
+import Login from './components/Login';
+import Signup from './components/Signup';
+import { translations } from './translations';
+import { supabase } from './supabaseClient';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [patients, setPatients] = useState(() => {
-    const saved = localStorage.getItem('medicloud_patients');
-    return saved ? JSON.parse(saved) : initialPatients;
-  });
+  const [session, setSession] = useState(null);
+  const [authView, setAuthView] = useState('login'); // 'login' or 'signup'
+  const [selectedRecordId, setSelectedRecordId] = useState(null);
   const [editingPatient, setEditingPatient] = useState(null);
+  const [activePatient, setActivePatient] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [isProfileEditing, setIsProfileEditing] = useState(false);
+  const [language, setLanguage] = useState(localStorage.getItem('medicloud_lang') || 'ko');
+  const [theme, setTheme] = useState(localStorage.getItem('medicloud_theme') || 'light');
 
-  // 환자 데이터 변경 시 localStorage에 저장
+  const [savedRecords, setSavedRecords] = useState(() => {
+    const stored = localStorage.getItem('medicloud_records');
+    return stored ? JSON.parse(stored) : [];
+  });
+
+  const t = translations[language];
+
+  const fetchUserProfile = async (userId) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (data) setUserProfile(data);
+  };
+
+  // 인증 상태 감시
   useEffect(() => {
-    localStorage.setItem('medicloud_patients', JSON.stringify(patients));
-  }, [patients]);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) fetchUserProfile(session.user.id);
+    });
 
-  // 새 차트 ID 생성
-  const generateChartId = () => {
-    const maxNum = patients.reduce((max, p) => {
-      const num = parseInt(p.id.replace('P', '')) || 0;
-      return num > max ? num : max;
-    }, 0);
-    return 'P' + String(maxNum + 1).padStart(3, '0');
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session?.user) fetchUserProfile(session.user.id);
+      else setUserProfile(null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 테마 적용
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('medicloud_theme', theme);
+  }, [theme]);
+
+  const toggleLanguage = () => {
+    const nextLang = language === 'ko' ? 'en' : 'ko';
+    setLanguage(nextLang);
+    localStorage.setItem('medicloud_lang', nextLang);
   };
 
-  // 환자 등록
-  const handleRegisterPatient = (patientData) => {
-    const newPatient = {
-      ...patientData,
-      id: generateChartId(),
-      lastVisit: new Date().toISOString().split('T')[0],
-    };
-    setPatients([...patients, newPatient]);
-    setActiveTab('patients');
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
-  // 환자 수정
-  const handleUpdatePatient = (patientData) => {
-    setPatients(patients.map(p => p.id === patientData.id ? { ...p, ...patientData } : p));
-    setEditingPatient(null);
-    setActiveTab('patients');
+  // 기록 저장 시 로컬 스토리지 업데이트
+  const handleUpdateRecords = (newRecords) => {
+    setSavedRecords(newRecords);
+    localStorage.setItem('medicloud_records', JSON.stringify(newRecords));
   };
 
-  // 환자 삭제
-  const handleDeletePatient = (patientId) => {
-    if (window.confirm('정말 삭제하시겠습니까?')) {
-      setPatients(patients.filter(p => p.id !== patientId));
-    }
+  const handleRecordSelect = (recordId) => {
+    setSelectedRecordId(recordId);
+    setActiveTab('records');
   };
 
-  // 환자 상세/수정 보기
   const handleEditPatient = (patient) => {
     setEditingPatient(patient);
-    setActiveTab('edit');
+    setActiveTab('registration');
+  };
+
+  const handleStartConsultation = (patient) => {
+    setActivePatient(patient);
+    setSelectedRecordId(null); // Clear previous record selection for fresh start
+    setActiveTab('records');
   };
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard patientCount={patients.length} />;
+        return <Dashboard language={language} t={t} />;
       case 'patients':
         return (
-          <PatientList 
-            patients={patients}
-            onAddPatient={() => setActiveTab('register')} 
+          <PatientList
+            t={t}
             onEditPatient={handleEditPatient}
-            onDeletePatient={handleDeletePatient}
+            onStartConsultation={handleStartConsultation}
           />
         );
-      case 'register':
+      case 'registration':
         return (
-          <PatientRegistration 
-            onBack={() => setActiveTab('patients')} 
-            onSave={handleRegisterPatient}
-          />
-        );
-      case 'edit':
-        return (
-          <PatientRegistration 
+          <PatientRegistration
+            language={language}
+            t={t}
             initialData={editingPatient}
-            onBack={() => { setEditingPatient(null); setActiveTab('patients'); }} 
-            onSave={handleUpdatePatient}
+            onRegisterSuccess={() => {
+              setEditingPatient(null);
+              setActiveTab('patients');
+            }}
           />
         );
       case 'records':
-        return <MedicalRecord />;
+        return (
+          <MedicalRecord
+            activePatient={activePatient}
+            savedRecords={filteredRecords}
+            setSavedRecords={handleUpdateRecords}
+            selectedRecordId={selectedRecordId}
+            setSelectedRecordId={setSelectedRecordId}
+            language={language}
+            t={t}
+          />
+        );
       default:
-        return <Dashboard patientCount={patients.length} />;
+        return <Dashboard language={language} t={t} />;
     }
   };
 
+  if (!session) {
+    return authView === 'login' ? (
+      <Login
+        onSwitchToSignup={() => setAuthView('signup')}
+        t={t}
+      />
+    ) : (
+      <Signup
+        onSwitchToLogin={() => setAuthView('login')}
+        t={t}
+      />
+    );
+  }
+
+  const filteredRecords = activePatient
+    ? savedRecords.filter(r => r.patientId === activePatient.chart_id)
+    : savedRecords;
+
   return (
-    <>
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+    <div style={styles.appContainer}>
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={(tab) => {
+          if (tab !== 'registration') setEditingPatient(null);
+          else if (activeTab !== 'registration') setEditingPatient(null);
+
+          if (tab !== 'records') {
+            setActivePatient(null);
+          }
+          setActiveTab(tab);
+        }}
+        savedRecords={filteredRecords}
+        activePatient={activePatient}
+        onRecordClick={handleRecordSelect}
+        language={language}
+        toggleLanguage={toggleLanguage}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        user={session.user}
+        profile={userProfile}
+        onEditProfile={() => setIsProfileEditing(true)}
+        onLogout={() => supabase.auth.signOut()}
+        t={t}
+      />
       <main style={styles.main}>
         {renderContent()}
       </main>
-    </>
+
+      {isProfileEditing && userProfile && (
+        <ProfileEdit
+          profile={userProfile}
+          onSave={() => {
+            fetchUserProfile(session.user.id);
+            setIsProfileEditing(false);
+            alert(t.profile.saveSuccess);
+          }}
+          onCancel={() => setIsProfileEditing(false)}
+          t={t}
+        />
+      )}
+    </div>
   );
 }
 
 const styles = {
+  appContainer: {
+    display: 'flex',
+    width: '100%',
+    height: '100vh',
+  },
   main: {
     flex: 1,
     height: '100vh',

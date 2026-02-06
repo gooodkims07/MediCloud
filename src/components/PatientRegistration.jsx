@@ -1,135 +1,152 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 
-const PatientRegistration = ({ initialData, onBack, onSave }) => {
+const PatientRegistration = ({ language, t, onRegisterSuccess, initialData }) => {
     const isEdit = !!initialData;
-    
-    const [name, setName] = useState('');
-    const [gender, setGender] = useState('male');
-    const [birthDate, setBirthDate] = useState('');
-    const [phone, setPhone] = useState('');
-    const [address, setAddress] = useState('');
-    const [detailAddress, setDetailAddress] = useState('');
-    const [zipCode, setZipCode] = useState('');
+    const [chartId, setChartId] = useState(initialData?.chart_id || '');
+    const [name, setName] = useState(initialData?.name || '');
+    const [gender, setGender] = useState(initialData?.gender || 'male');
+    const [birthDate, setBirthDate] = useState(initialData?.birth_date || '');
+    const [phone, setPhone] = useState(initialData?.phone || '');
+    const [active, setActive] = useState(initialData?.active ?? true);
+    const [maritalStatus, setMaritalStatus] = useState(initialData?.marital_status || 'U');
+    const [contactName, setContactName] = useState(initialData?.contact?.name || '');
+    const [contactRelation, setContactRelation] = useState(initialData?.contact?.relationship || '');
+    const [contactPhone, setContactPhone] = useState(initialData?.contact?.phone || '');
+    const [communication, setCommunication] = useState(initialData?.communication || language);
+    const [gpId, setGpId] = useState(initialData?.general_practitioner || '');
+    const [orgName, setOrgName] = useState(initialData?.managing_organization || 'MediCloud Central Hospital');
     const [loading, setLoading] = useState(false);
+    const [generating, setGenerating] = useState(!isEdit);
 
-    // 수정 모드일 때 기존 데이터 로드
     useEffect(() => {
-        if (initialData) {
-            setName(initialData.name || '');
-            setGender(initialData.gender || 'male');
-            setBirthDate(initialData.birthDate || '');
-            setPhone(initialData.phone || '');
-            setAddress(initialData.address || '');
-            setDetailAddress(initialData.detailAddress || '');
-            setZipCode(initialData.zipCode || '');
+        if (!isEdit) {
+            generateAutoChartId();
         }
-    }, [initialData]);
+        fetchCurrentUser();
+    }, [isEdit]);
 
-    const handleAddressSearch = () => {
-        if (!window.daum || !window.daum.Postcode) {
-            alert('주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
-            return;
-        }
-        
-        new window.daum.Postcode({
-            oncomplete: function(data) {
-                let fullAddr = data.address;
-                let extraAddr = '';
+    const fetchCurrentUser = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) setGpId(user.id);
+    };
 
-                if (data.addressType === 'R') {
-                    if (data.bname !== '') extraAddr += data.bname;
-                    if (data.buildingName !== '') extraAddr += (extraAddr !== '' ? ', ' + data.buildingName : data.buildingName);
-                    fullAddr += (extraAddr !== '' ? ' (' + extraAddr + ')' : '');
-                }
+    const generateAutoChartId = async () => {
+        setGenerating(true);
+        try {
+            const { data, error } = await supabase.rpc('get_next_chart_id_preview');
 
-                setAddress(fullAddr);
-                setZipCode(data.zonecode);
-                
-                setTimeout(() => {
-                    document.getElementById("detailAddress")?.focus();
-                }, 100);
+            if (error) throw error;
+            setChartId(data || 'P001');
+        } catch (error) {
+            console.error('Error fetching preview chart_id:', error);
+            // Fallback: fetch last and increment
+            const { data } = await supabase
+                .from('patients')
+                .select('chart_id')
+                .order('chart_id', { ascending: false })
+                .limit(1);
+
+            if (data && data.length > 0) {
+                const nextNum = (parseInt(data[0].chart_id.replace(/[^\d]/g, '')) || 0) + 1;
+                setChartId('P' + String(nextNum).padStart(3, '0'));
+            } else {
+                setChartId('P001');
             }
-        }).open();
+        } finally {
+            setGenerating(false);
+        }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
-        if (!name.trim()) {
-            alert('성함을 입력해주세요.');
-            return;
-        }
-        if (!birthDate) {
-            alert('생년월일을 입력해주세요.');
-            return;
-        }
-
         setLoading(true);
 
         const patientData = {
-            ...(initialData || {}),
-            name: name.trim(),
+            name,
             gender,
-            birthDate,
-            phone: phone.trim(),
-            address,
-            detailAddress: detailAddress.trim(),
-            zipCode,
+            birth_date: birthDate,
+            phone,
+            active,
+            marital_status: maritalStatus,
+            contact: {
+                name: contactName,
+                relationship: contactRelation,
+                phone: contactPhone
+            },
+            communication,
+            general_practitioner: gpId || null,
+            managing_organization: orgName
         };
 
-        try {
-            await onSave(patientData);
-            alert(isEdit ? '환자 정보가 수정되었습니다.' : '환자 등록이 완료되었습니다.');
-        } catch (error) {
-            alert('오류가 발생했습니다: ' + error.message);
-        } finally {
-            setLoading(false);
+        let query;
+        if (isEdit) {
+            query = supabase.from('patients').update(patientData).eq('id', initialData.id);
+        } else {
+            query = supabase.from('patients').insert([patientData]);
         }
+
+        const { error } = await query;
+
+        if (error) {
+            const errorMsg = isEdit ? t.patientRegistration.updateError : t.patientRegistration.error;
+            alert(errorMsg + ': ' + error.message);
+        } else {
+            const successMsg = isEdit ? t.patientRegistration.updateSuccess : t.patientRegistration.success;
+            alert(successMsg);
+            if (onRegisterSuccess) onRegisterSuccess();
+        }
+        setLoading(false);
     };
 
     return (
         <div style={styles.container}>
             <div style={styles.card}>
                 <header style={styles.header}>
-                    <div style={styles.headerTop}>
-                        <button style={styles.backBtn} onClick={onBack}>← 뒤로가기</button>
-                    </div>
-                    <h2 style={styles.title}>{isEdit ? '환자 정보 수정' : '신규 환자 등록'}</h2>
-                    <p style={styles.subtitle}>
-                        {isEdit ? `차트번호: ${initialData.id}` : '환자 정보를 입력해 주세요'}
-                    </p>
+                    <h2 style={styles.title}>{isEdit ? t.patientRegistration.editTitle : t.patientRegistration.title}</h2>
+                    <p style={styles.subtitle}>{isEdit ? t.patientRegistration.editSubtitle : t.patientRegistration.subtitle}</p>
                 </header>
 
                 <form style={styles.form} onSubmit={handleSubmit}>
                     <div style={styles.inputGrid}>
                         <div style={styles.inputGroup}>
-                            <label style={styles.label}>성함 <span style={styles.required}>*</span></label>
+                            <label style={styles.label}>{t.patientRegistration.chartId}</label>
+                            <input
+                                type="text"
+                                style={{ ...styles.input, backgroundColor: 'var(--bg-color)', fontWeight: '700' }}
+                                value={generating ? t.patientRegistration.generatingId : chartId}
+                                readOnly
+                            />
+                        </div>
+
+                        <div style={styles.inputGroup}>
+                            <label style={styles.label}>{t.patientRegistration.name}</label>
                             <input
                                 type="text"
                                 style={styles.input}
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
-                                placeholder="홍길동"
                                 required
                             />
                         </div>
 
                         <div style={styles.inputGroup}>
-                            <label style={styles.label}>성별 <span style={styles.required}>*</span></label>
+                            <label style={styles.label}>{t.patientRegistration.gender}</label>
                             <select
                                 style={styles.select}
                                 value={gender}
                                 onChange={(e) => setGender(e.target.value)}
                                 required
                             >
-                                <option value="male">남성</option>
-                                <option value="female">여성</option>
-                                <option value="other">기타</option>
+                                <option value="male">{t.patientRegistration.male}</option>
+                                <option value="female">{t.patientRegistration.female}</option>
+                                <option value="other">{t.patientRegistration.other}</option>
+                                <option value="unknown">{t.patientRegistration.unknown}</option>
                             </select>
                         </div>
 
                         <div style={styles.inputGroup}>
-                            <label style={styles.label}>생년월일 <span style={styles.required}>*</span></label>
+                            <label style={styles.label}>{t.patientRegistration.birthDate}</label>
                             <input
                                 type="date"
                                 style={styles.input}
@@ -140,7 +157,7 @@ const PatientRegistration = ({ initialData, onBack, onSave }) => {
                         </div>
 
                         <div style={styles.inputGroup}>
-                            <label style={styles.label}>연락처</label>
+                            <label style={styles.label}>{t.patientRegistration.phone}</label>
                             <input
                                 type="tel"
                                 placeholder="010-0000-0000"
@@ -150,50 +167,107 @@ const PatientRegistration = ({ initialData, onBack, onSave }) => {
                             />
                         </div>
 
-                        <div style={styles.inputGroupFull}>
-                            <label style={styles.label}>주소</label>
-                            <div style={styles.addressRow}>
+                        <div style={styles.inputGroup}>
+                            <label style={styles.label}>{t.patientRegistration.active}</label>
+                            <label style={styles.switchLabel}>
                                 <input
-                                    type="text"
-                                    style={{...styles.input, flex: '0 0 140px'}}
-                                    value={zipCode}
-                                    placeholder="우편번호"
-                                    readOnly
+                                    type="checkbox"
+                                    checked={active}
+                                    onChange={(e) => setActive(e.target.checked)}
                                 />
-                                <button 
-                                    type="button" 
-                                    onClick={handleAddressSearch} 
-                                    style={styles.addressBtn}
-                                >
-                                    🔍 주소 찾기
-                                </button>
-                            </div>
+                                <span style={styles.activeText}>{active ? 'Active' : 'Inactive'}</span>
+                            </label>
+                        </div>
+
+                        <div style={styles.inputGroup}>
+                            <label style={styles.label}>{t.patientRegistration.maritalStatus}</label>
+                            <select
+                                style={styles.select}
+                                value={maritalStatus}
+                                onChange={(e) => setMaritalStatus(e.target.value)}
+                            >
+                                <option value="U">{t.patientRegistration.unknown}</option>
+                                <option value="S">{t.patientRegistration.single}</option>
+                                <option value="M">{t.patientRegistration.married}</option>
+                                <option value="D">{t.patientRegistration.divorced}</option>
+                                <option value="W">{t.patientRegistration.widowed}</option>
+                            </select>
+                        </div>
+
+                        <div style={styles.inputGroup}>
+                            <label style={styles.label}>{t.patientRegistration.communication}</label>
+                            <select
+                                style={styles.select}
+                                value={communication}
+                                onChange={(e) => setCommunication(e.target.value)}
+                            >
+                                <option value="ko">한국어 (Korean)</option>
+                                <option value="en">영어 (English)</option>
+                            </select>
+                        </div>
+
+                        <div style={styles.sectionHeader}>
+                            <h3 style={styles.sectionTitle}>{t.patientRegistration.contact}</h3>
+                        </div>
+
+                        <div style={styles.inputGroup}>
+                            <label style={styles.label}>{t.patientRegistration.contactName}</label>
                             <input
                                 type="text"
-                                style={{...styles.input, marginTop: '0.5rem'}}
-                                value={address}
-                                placeholder="도로명 주소 (주소 찾기 버튼을 클릭하세요)"
+                                style={styles.input}
+                                value={contactName}
+                                onChange={(e) => setContactName(e.target.value)}
+                            />
+                        </div>
+
+                        <div style={styles.inputGroup}>
+                            <label style={styles.label}>{t.patientRegistration.contactRelation}</label>
+                            <input
+                                type="text"
+                                style={styles.input}
+                                value={contactRelation}
+                                onChange={(e) => setContactRelation(e.target.value)}
+                            />
+                        </div>
+
+                        <div style={styles.inputGroupFull}>
+                            <label style={styles.label}>{t.patientRegistration.contactPhone}</label>
+                            <input
+                                type="tel"
+                                style={styles.input}
+                                value={contactPhone}
+                                onChange={(e) => setContactPhone(e.target.value)}
+                            />
+                        </div>
+
+                        <div style={styles.sectionHeader}>
+                            <h3 style={styles.sectionTitle}>Healthcare Provider Info</h3>
+                        </div>
+
+                        <div style={styles.inputGroup}>
+                            <label style={styles.label}>{t.patientRegistration.generalPractitioner}</label>
+                            <input
+                                type="text"
+                                style={{ ...styles.input, backgroundColor: 'rgba(0,0,0,0.05)', color: 'var(--text-muted)' }}
+                                value={gpId ? `Dr. ${t.common.doctor} (${gpId.substring(0, 8)})` : 'Loading...'}
                                 readOnly
                             />
+                        </div>
+
+                        <div style={styles.inputGroup}>
+                            <label style={styles.label}>{t.patientRegistration.managingOrganization}</label>
                             <input
-                                id="detailAddress"
                                 type="text"
-                                style={{...styles.input, marginTop: '0.5rem'}}
-                                value={detailAddress}
-                                onChange={(e) => setDetailAddress(e.target.value)}
-                                placeholder="상세 주소 (동/호수 등)"
+                                style={styles.input}
+                                value={orgName}
+                                onChange={(e) => setOrgName(e.target.value)}
                             />
                         </div>
                     </div>
 
-                    <div style={styles.buttonRow}>
-                        <button type="button" style={styles.cancelBtn} onClick={onBack}>
-                            취소
-                        </button>
-                        <button type="submit" style={styles.submitBtn} disabled={loading}>
-                            {loading ? '저장 중...' : (isEdit ? '수정 완료' : '환자 등록')}
-                        </button>
-                    </div>
+                    <button type="submit" style={styles.submitBtn} disabled={loading || generating}>
+                        {loading ? '...' : (isEdit ? t.patientRegistration.updateBtn : t.patientRegistration.submit)}
+                    </button>
                 </form>
             </div>
         </div>
@@ -202,9 +276,9 @@ const PatientRegistration = ({ initialData, onBack, onSave }) => {
 
 const styles = {
     container: {
-        padding: '2rem',
+        padding: '2.5rem',
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: 'var(--bg-color)',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'flex-start',
@@ -212,37 +286,25 @@ const styles = {
     },
     card: {
         width: '100%',
-        maxWidth: '700px',
-        backgroundColor: 'white',
+        maxWidth: '850px',
+        backgroundColor: 'var(--card-bg)',
         padding: '2.5rem',
-        borderRadius: '16px',
-        boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08)',
-        border: '1px solid #e2e8f0',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-lg)',
+        border: '1px solid var(--border-color)',
     },
     header: {
         marginBottom: '2rem',
     },
-    headerTop: {
-        marginBottom: '1rem',
-    },
-    backBtn: {
-        background: 'none',
-        border: 'none',
-        color: '#64748b',
-        fontSize: '0.9rem',
-        cursor: 'pointer',
-        padding: '0.5rem 0',
-        fontWeight: '500',
-    },
     title: {
         fontSize: '1.75rem',
         fontWeight: '800',
-        color: '#1e293b',
+        color: 'var(--text-main)',
         letterSpacing: '-0.025em',
     },
     subtitle: {
         fontSize: '0.95rem',
-        color: '#64748b',
+        color: 'var(--text-muted)',
         marginTop: '0.4rem',
     },
     form: {
@@ -258,88 +320,72 @@ const styles = {
     inputGroup: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.5rem',
+        gap: '0.6rem',
     },
     inputGroupFull: {
         gridColumn: 'span 2',
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.5rem',
+        gap: '0.6rem',
+    },
+    sectionHeader: {
+        gridColumn: 'span 2',
+        marginTop: '1.5rem',
+        paddingTop: '1.5rem',
+        borderTop: '1px dashed var(--border-color)',
+    },
+    sectionTitle: {
+        fontSize: '1.1rem',
+        fontWeight: '700',
+        color: 'var(--primary-color)',
+    },
+    switchLabel: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.8rem',
+        cursor: 'pointer',
+    },
+    activeText: {
+        fontSize: '0.9rem',
+        color: 'var(--text-main)',
     },
     label: {
         fontSize: '0.85rem',
-        fontWeight: '600',
-        color: '#475569',
-    },
-    required: {
-        color: '#ef4444',
+        fontWeight: '700',
+        color: 'var(--text-muted)',
     },
     input: {
-        padding: '0.875rem 1rem',
-        borderRadius: '10px',
-        border: '1px solid #e2e8f0',
-        backgroundColor: '#fff',
-        color: '#1e293b',
+        padding: '1rem',
+        borderRadius: '12px',
+        border: '1px solid var(--border-color)',
+        backgroundColor: 'transparent',
+        color: 'var(--text-main)',
         fontSize: '0.95rem',
         outline: 'none',
-        transition: 'border-color 0.2s, box-shadow 0.2s',
+        transition: 'all 0.2s',
     },
     select: {
-        padding: '0.875rem 1rem',
-        borderRadius: '10px',
-        border: '1px solid #e2e8f0',
-        backgroundColor: '#fff',
-        color: '#1e293b',
+        padding: '1rem',
+        borderRadius: '12px',
+        border: '1px solid var(--border-color)',
+        backgroundColor: 'transparent',
+        color: 'var(--text-main)',
         fontSize: '0.95rem',
         outline: 'none',
-        cursor: 'pointer',
-    },
-    addressRow: {
-        display: 'flex',
-        gap: '0.75rem',
-        alignItems: 'center',
-    },
-    addressBtn: {
-        padding: '0.875rem 1.25rem',
-        backgroundColor: '#0d9488',
-        color: 'white',
-        border: 'none',
-        borderRadius: '10px',
-        fontSize: '0.9rem',
-        fontWeight: '600',
-        cursor: 'pointer',
-        whiteSpace: 'nowrap',
-        transition: 'background-color 0.2s',
-    },
-    buttonRow: {
-        display: 'flex',
-        gap: '1rem',
-        justifyContent: 'flex-end',
-        paddingTop: '1rem',
-        borderTop: '1px solid #e2e8f0',
-    },
-    cancelBtn: {
-        padding: '1rem 2rem',
-        backgroundColor: '#f1f5f9',
-        color: '#64748b',
-        border: 'none',
-        borderRadius: '10px',
-        fontSize: '1rem',
-        fontWeight: '600',
-        cursor: 'pointer',
+        appearance: 'none',
     },
     submitBtn: {
-        padding: '1rem 2rem',
-        backgroundColor: '#0d9488',
+        padding: '1.25rem',
+        backgroundColor: 'var(--primary-color)',
         color: 'white',
         border: 'none',
-        borderRadius: '10px',
-        fontSize: '1rem',
+        borderRadius: '14px',
+        fontSize: '1.1rem',
         fontWeight: '700',
         cursor: 'pointer',
-        boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)',
+        boxShadow: '0 8px 16px rgba(13, 148, 136, 0.2)',
         transition: 'transform 0.2s, background-color 0.2s',
-    },
+    }
 };
 
 export default PatientRegistration;
