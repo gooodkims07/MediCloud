@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const PatientList = () => {
+const PatientList = ({ onAddPatient }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
     const patients = [
@@ -26,7 +26,7 @@ const PatientList = () => {
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <button style={styles.addButton}>+ 새 환자 등록</button>
+                    <button style={styles.addButton} onClick={onAddPatient}>+ 새 환자 등록</button>
                 </div>
             </header>
 

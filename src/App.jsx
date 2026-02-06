@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import PatientList from './components/PatientList';
+import PatientRegistration from './components/PatientRegistration';
 import MedicalRecord from './components/MedicalRecord';
 
 function App() {
@@ -12,7 +13,9 @@ function App() {
       case 'dashboard':
         return <Dashboard />;
       case 'patients':
-        return <PatientList />;
+        return <PatientList onAddPatient={() => setActiveTab('register')} />;
+      case 'register':
+        return <PatientRegistration onBack={() => setActiveTab('patients')} onRegisterSuccess={() => setActiveTab('patients')} />;
       case 'records':
         return <MedicalRecord />;
       default:

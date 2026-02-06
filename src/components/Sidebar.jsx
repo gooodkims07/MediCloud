@@ -21,6 +21,12 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
                     <span>👥</span> 환자 관리
                 </div>
                 <div
+                    style={{ ...styles.navItem, ...(activeTab === 'register' ? styles.navActive : {}) }}
+                    onClick={() => setActiveTab('register')}
+                >
+                    <span>➕</span> 신규 환자 등록
+                </div>
+                <div
                     style={{ ...styles.navItem, ...(activeTab === 'records' ? styles.navActive : {}) }}
                     onClick={() => setActiveTab('records')}
                 >
