@@ -1,15 +1,33 @@
 import React, { useState } from 'react';
 
-const PatientList = ({ onAddPatient }) => {
+const PatientList = ({ patients, onAddPatient, onEditPatient, onDeletePatient }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
-    const patients = [
-        { id: 'P001', name: '김지아', gender: '여', age: 28, lastVisit: '2024-01-20', phone: '010-1234-5678' },
-        { id: 'P002', name: '이민수', gender: '남', age: 45, lastVisit: '2024-01-28', phone: '010-9876-5432' },
-        { id: 'P003', name: '박철수', gender: '남', age: 32, lastVisit: '2024-01-15', phone: '010-5555-4444' },
-        { id: 'P004', name: '최유진', gender: '여', age: 39, lastVisit: '2024-01-10', phone: '010-8888-7777' },
-        { id: 'P005', name: '정현우', gender: '남', age: 52, lastVisit: '2024-01-05', phone: '010-2222-3333' },
-    ];
+    // 나이 계산
+    const calculateAge = (birthDate) => {
+        if (!birthDate) return '-';
+        const today = new Date();
+        const birth = new Date(birthDate);
+        let age = today.getFullYear() - birth.getFullYear();
+        const monthDiff = today.getMonth() - birth.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+            age--;
+        }
+        return age;
+    };
+
+    // 성별 표시
+    const getGenderDisplay = (gender) => {
+        switch (gender) {
+            case 'male': return '남';
+            case 'female': return '여';
+            default: return '-';
+        }
+    };
+
+    const filteredPatients = patients.filter(p => 
+        p.name.includes(searchTerm) || p.id.includes(searchTerm) || p.phone.includes(searchTerm)
+    );
 
     return (
         <div style={styles.container}>
@@ -20,7 +38,7 @@ const PatientList = ({ onAddPatient }) => {
                         <span style={styles.searchIcon}>🔍</span>
                         <input
                             type="text"
-                            placeholder="환자명 또는 차트 번호 검색"
+                            placeholder="환자명, 차트번호, 연락처 검색"
                             style={styles.searchInput}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -38,26 +56,60 @@ const PatientList = ({ onAddPatient }) => {
                             <th style={styles.th}>성함</th>
                             <th style={styles.th}>성별/나이</th>
                             <th style={styles.th}>연락처</th>
+                            <th style={styles.th}>주소</th>
                             <th style={styles.th}>최근 내원일</th>
                             <th style={styles.th}>관리</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {patients.filter(p => p.name.includes(searchTerm) || p.id.includes(searchTerm)).map((patient) => (
-                            <tr key={patient.id} style={styles.tableRow}>
-                                <td style={{ ...styles.td, fontWeight: '600', color: 'var(--primary-color)' }}>{patient.id}</td>
-                                <td style={styles.td}>{patient.name}</td>
-                                <td style={styles.td}>{patient.gender} / {patient.age}세</td>
-                                <td style={styles.td}>{patient.phone}</td>
-                                <td style={styles.td}>{patient.lastVisit}</td>
-                                <td style={styles.td}>
-                                    <button style={styles.actionBtn}>상세</button>
-                                    <button style={{ ...styles.actionBtn, color: 'var(--secondary-color)' }}>기록</button>
+                        {filteredPatients.length === 0 ? (
+                            <tr>
+                                <td colSpan="7" style={styles.emptyRow}>
+                                    {searchTerm ? '검색 결과가 없습니다.' : '등록된 환자가 없습니다.'}
                                 </td>
                             </tr>
-                        ))}
+                        ) : (
+                            filteredPatients.map((patient) => (
+                                <tr 
+                                    key={patient.id} 
+                                    style={styles.tableRow}
+                                    onClick={() => onEditPatient(patient)}
+                                >
+                                    <td style={{ ...styles.td, fontWeight: '600', color: 'var(--primary-color)' }}>
+                                        {patient.id}
+                                    </td>
+                                    <td style={styles.td}>{patient.name}</td>
+                                    <td style={styles.td}>
+                                        {getGenderDisplay(patient.gender)} / {calculateAge(patient.birthDate)}세
+                                    </td>
+                                    <td style={styles.td}>{patient.phone || '-'}</td>
+                                    <td style={{...styles.td, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                                        {patient.address || '-'}
+                                    </td>
+                                    <td style={styles.td}>{patient.lastVisit || '-'}</td>
+                                    <td style={styles.td}>
+                                        <button 
+                                            style={styles.actionBtn}
+                                            onClick={(e) => { e.stopPropagation(); onEditPatient(patient); }}
+                                        >
+                                            ✏️ 수정
+                                        </button>
+                                        <button 
+                                            style={{ ...styles.actionBtn, color: '#ef4444' }}
+                                            onClick={(e) => { e.stopPropagation(); onDeletePatient(patient.id); }}
+                                        >
+                                            🗑️ 삭제
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
+            </div>
+            
+            <div style={styles.footer}>
+                총 <strong>{filteredPatients.length}</strong>명의 환자
             </div>
         </div>
     );
@@ -68,6 +120,8 @@ const styles = {
         padding: '2rem',
         flex: 1,
         overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
     },
     header: {
         display: 'flex',
@@ -115,6 +169,7 @@ const styles = {
         borderRadius: 'var(--radius)',
         boxShadow: 'var(--shadow)',
         overflow: 'hidden',
+        flex: 1,
     },
     table: {
         width: '100%',
@@ -134,19 +189,36 @@ const styles = {
     tableRow: {
         borderBottom: '1px solid #f1f5f9',
         transition: 'background-color 0.2s',
+        cursor: 'pointer',
     },
     td: {
-        padding: '1.25rem 1rem',
+        padding: '1rem',
         fontSize: '0.9rem',
+    },
+    emptyRow: {
+        padding: '3rem',
+        textAlign: 'center',
+        color: '#94a3b8',
+        fontSize: '0.95rem',
     },
     actionBtn: {
         background: 'none',
         border: 'none',
-        color: 'var(--text-muted)',
+        color: 'var(--primary-color)',
         fontWeight: '600',
         cursor: 'pointer',
-        marginRight: '1rem',
+        marginRight: '0.75rem',
         fontSize: '0.85rem',
+        padding: '0.25rem 0.5rem',
+        borderRadius: '4px',
+        transition: 'background-color 0.2s',
+    },
+    footer: {
+        marginTop: '1rem',
+        padding: '0.75rem',
+        textAlign: 'right',
+        color: '#64748b',
+        fontSize: '0.9rem',
     },
 };
 

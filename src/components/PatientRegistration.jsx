@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-const PatientRegistration = ({ onBack, onRegisterSuccess }) => {
+const PatientRegistration = ({ initialData, onBack, onSave }) => {
+    const isEdit = !!initialData;
+    
     const [name, setName] = useState('');
     const [gender, setGender] = useState('male');
     const [birthDate, setBirthDate] = useState('');
@@ -10,7 +12,25 @@ const PatientRegistration = ({ onBack, onRegisterSuccess }) => {
     const [zipCode, setZipCode] = useState('');
     const [loading, setLoading] = useState(false);
 
+    // 수정 모드일 때 기존 데이터 로드
+    useEffect(() => {
+        if (initialData) {
+            setName(initialData.name || '');
+            setGender(initialData.gender || 'male');
+            setBirthDate(initialData.birthDate || '');
+            setPhone(initialData.phone || '');
+            setAddress(initialData.address || '');
+            setDetailAddress(initialData.detailAddress || '');
+            setZipCode(initialData.zipCode || '');
+        }
+    }, [initialData]);
+
     const handleAddressSearch = () => {
+        if (!window.daum || !window.daum.Postcode) {
+            alert('주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+            return;
+        }
+        
         new window.daum.Postcode({
             oncomplete: function(data) {
                 let fullAddr = data.address;
@@ -34,28 +54,37 @@ const PatientRegistration = ({ onBack, onRegisterSuccess }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        if (!name.trim()) {
+            alert('성함을 입력해주세요.');
+            return;
+        }
+        if (!birthDate) {
+            alert('생년월일을 입력해주세요.');
+            return;
+        }
+
         setLoading(true);
 
         const patientData = {
-            id: 'P' + String(Date.now()).slice(-6),
-            name,
+            ...(initialData || {}),
+            name: name.trim(),
             gender,
             birthDate,
-            phone,
+            phone: phone.trim(),
             address,
-            detailAddress,
+            detailAddress: detailAddress.trim(),
             zipCode,
-            createdAt: new Date().toISOString(),
         };
 
-        // TODO: DB 연동 시 Supabase insert 추가
-        console.log('Patient Data:', patientData);
-        
-        alert('환자 등록이 완료되었습니다!');
-        setLoading(false);
-        
-        if (onRegisterSuccess) onRegisterSuccess();
-        if (onBack) onBack();
+        try {
+            await onSave(patientData);
+            alert(isEdit ? '환자 정보가 수정되었습니다.' : '환자 등록이 완료되었습니다.');
+        } catch (error) {
+            alert('오류가 발생했습니다: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -63,16 +92,18 @@ const PatientRegistration = ({ onBack, onRegisterSuccess }) => {
             <div style={styles.card}>
                 <header style={styles.header}>
                     <div style={styles.headerTop}>
-                        <button style={styles.backBtn} onClick={onBack}>← 뒤로</button>
+                        <button style={styles.backBtn} onClick={onBack}>← 뒤로가기</button>
                     </div>
-                    <h2 style={styles.title}>신규 환자 등록</h2>
-                    <p style={styles.subtitle}>환자 정보를 입력해 주세요</p>
+                    <h2 style={styles.title}>{isEdit ? '환자 정보 수정' : '신규 환자 등록'}</h2>
+                    <p style={styles.subtitle}>
+                        {isEdit ? `차트번호: ${initialData.id}` : '환자 정보를 입력해 주세요'}
+                    </p>
                 </header>
 
                 <form style={styles.form} onSubmit={handleSubmit}>
                     <div style={styles.inputGrid}>
                         <div style={styles.inputGroup}>
-                            <label style={styles.label}>성함 *</label>
+                            <label style={styles.label}>성함 <span style={styles.required}>*</span></label>
                             <input
                                 type="text"
                                 style={styles.input}
@@ -84,7 +115,7 @@ const PatientRegistration = ({ onBack, onRegisterSuccess }) => {
                         </div>
 
                         <div style={styles.inputGroup}>
-                            <label style={styles.label}>성별 *</label>
+                            <label style={styles.label}>성별 <span style={styles.required}>*</span></label>
                             <select
                                 style={styles.select}
                                 value={gender}
@@ -98,7 +129,7 @@ const PatientRegistration = ({ onBack, onRegisterSuccess }) => {
                         </div>
 
                         <div style={styles.inputGroup}>
-                            <label style={styles.label}>생년월일 *</label>
+                            <label style={styles.label}>생년월일 <span style={styles.required}>*</span></label>
                             <input
                                 type="date"
                                 style={styles.input}
@@ -124,7 +155,7 @@ const PatientRegistration = ({ onBack, onRegisterSuccess }) => {
                             <div style={styles.addressRow}>
                                 <input
                                     type="text"
-                                    style={{...styles.input, flex: 1, maxWidth: '150px'}}
+                                    style={{...styles.input, flex: '0 0 140px'}}
                                     value={zipCode}
                                     placeholder="우편번호"
                                     readOnly
@@ -141,7 +172,7 @@ const PatientRegistration = ({ onBack, onRegisterSuccess }) => {
                                 type="text"
                                 style={{...styles.input, marginTop: '0.5rem'}}
                                 value={address}
-                                placeholder="도로명 주소"
+                                placeholder="도로명 주소 (주소 찾기 버튼을 클릭하세요)"
                                 readOnly
                             />
                             <input
@@ -150,7 +181,7 @@ const PatientRegistration = ({ onBack, onRegisterSuccess }) => {
                                 style={{...styles.input, marginTop: '0.5rem'}}
                                 value={detailAddress}
                                 onChange={(e) => setDetailAddress(e.target.value)}
-                                placeholder="상세 주소를 입력하세요 (동/호수 등)"
+                                placeholder="상세 주소 (동/호수 등)"
                             />
                         </div>
                     </div>
@@ -160,7 +191,7 @@ const PatientRegistration = ({ onBack, onRegisterSuccess }) => {
                             취소
                         </button>
                         <button type="submit" style={styles.submitBtn} disabled={loading}>
-                            {loading ? '등록 중...' : '환자 등록'}
+                            {loading ? '저장 중...' : (isEdit ? '수정 완료' : '환자 등록')}
                         </button>
                     </div>
                 </form>
@@ -239,6 +270,9 @@ const styles = {
         fontSize: '0.85rem',
         fontWeight: '600',
         color: '#475569',
+    },
+    required: {
+        color: '#ef4444',
     },
     input: {
         padding: '0.875rem 1rem',

@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Dashboard = () => {
+const Dashboard = ({ patientCount = 0 }) => {
     return (
         <div style={styles.container}>
             <header style={styles.header}>
@@ -14,8 +14,8 @@ const Dashboard = () => {
                         <span style={{ ...styles.statIcon, backgroundColor: '#dcfce7', color: '#166534' }}>👥</span>
                         <span style={styles.statLabel}>전체 환자</span>
                     </div>
-                    <div style={styles.statValue}>1,284</div>
-                    <div style={styles.statTrend}>↑ 12% vs last month</div>
+                    <div style={styles.statValue}>{patientCount.toLocaleString()}</div>
+                    <div style={styles.statTrend}>등록된 환자 수</div>
                 </div>
                 <div style={styles.statCard}>
                     <div style={styles.statHeader}>
