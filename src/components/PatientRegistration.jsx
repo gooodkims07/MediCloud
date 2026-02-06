@@ -16,6 +16,9 @@ const PatientRegistration = ({ language, t, onRegisterSuccess, initialData }) =>
     const [communication, setCommunication] = useState(initialData?.communication || language);
     const [gpId, setGpId] = useState(initialData?.general_practitioner || '');
     const [orgName, setOrgName] = useState(initialData?.managing_organization || 'MediCloud Central Hospital');
+    const [zipCode, setZipCode] = useState(initialData?.zip_code || '');
+    const [address, setAddress] = useState(initialData?.address || '');
+    const [detailAddress, setDetailAddress] = useState(initialData?.detail_address || '');
     const [loading, setLoading] = useState(false);
     const [generating, setGenerating] = useState(!isEdit);
 
@@ -24,6 +27,16 @@ const PatientRegistration = ({ language, t, onRegisterSuccess, initialData }) =>
             generateAutoChartId();
         }
         fetchCurrentUser();
+
+        // Daum Postcode API 스크립트 로드
+        const script = document.createElement('script');
+        script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+        script.async = true;
+        document.body.appendChild(script);
+
+        return () => {
+            document.body.removeChild(script);
+        };
     }, [isEdit]);
 
     const fetchCurrentUser = async () => {
@@ -58,6 +71,31 @@ const PatientRegistration = ({ language, t, onRegisterSuccess, initialData }) =>
         }
     };
 
+    const handleFindAddress = () => {
+        if (!window.daum || !window.daum.Postcode) {
+            alert('주소 서비스 기능을 로드하는 중입니다. 잠시 후 다시 시도해주세요.');
+            return;
+        }
+
+        new window.daum.Postcode({
+            oncomplete: (data) => {
+                let fullAddr = data.roadAddress;
+                let extraAddr = '';
+
+                if (data.bname !== '') {
+                    extraAddr += data.bname;
+                }
+                if (data.buildingName !== '') {
+                    extraAddr += extraAddr !== '' ? `, ${data.buildingName}` : data.buildingName;
+                }
+                fullAddr += extraAddr !== '' ? ` (${extraAddr})` : '';
+
+                setZipCode(data.zonecode);
+                setAddress(fullAddr);
+            }
+        }).open();
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -76,7 +114,10 @@ const PatientRegistration = ({ language, t, onRegisterSuccess, initialData }) =>
             },
             communication,
             general_practitioner: gpId || null,
-            managing_organization: orgName
+            managing_organization: orgName,
+            zip_code: zipCode,
+            address: address,
+            detail_address: detailAddress
         };
 
         let query;
@@ -204,6 +245,52 @@ const PatientRegistration = ({ language, t, onRegisterSuccess, initialData }) =>
                                 <option value="ko">한국어 (Korean)</option>
                                 <option value="en">영어 (English)</option>
                             </select>
+                        </div>
+
+                        <div style={styles.sectionHeader}>
+                            <h3 style={styles.sectionTitle}>{t.patientRegistration.address}</h3>
+                        </div>
+
+                        <div style={styles.inputGroup}>
+                            <label style={styles.label}>{t.patientRegistration.zipCode}</label>
+                            <div style={styles.addressActionRow}>
+                                <input
+                                    type="text"
+                                    style={styles.input}
+                                    value={zipCode}
+                                    readOnly
+                                    placeholder="12345"
+                                />
+                                <button
+                                    type="button"
+                                    style={styles.actionBtn}
+                                    onClick={handleFindAddress}
+                                >
+                                    {t.patientRegistration.findAddress}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style={styles.inputGroup}>
+                            <label style={styles.label}>{t.patientRegistration.address}</label>
+                            <input
+                                type="text"
+                                style={styles.input}
+                                value={address}
+                                readOnly
+                                placeholder={t.patientRegistration.address}
+                            />
+                        </div>
+
+                        <div style={styles.inputGroupFull}>
+                            <label style={styles.label}>{t.patientRegistration.detailAddress}</label>
+                            <input
+                                type="text"
+                                style={styles.input}
+                                value={detailAddress}
+                                onChange={(e) => setDetailAddress(e.target.value)}
+                                placeholder={t.patientRegistration.detailAddress}
+                            />
                         </div>
 
                         <div style={styles.sectionHeader}>
@@ -385,6 +472,21 @@ const styles = {
         cursor: 'pointer',
         boxShadow: '0 8px 16px rgba(13, 148, 136, 0.2)',
         transition: 'transform 0.2s, background-color 0.2s',
+    },
+    addressActionRow: {
+        display: 'flex',
+        gap: '0.8rem',
+    },
+    actionBtn: {
+        padding: '0 1.5rem',
+        backgroundColor: 'var(--primary-color)',
+        color: 'white',
+        border: 'none',
+        borderRadius: '12px',
+        fontSize: '0.9rem',
+        fontWeight: '700',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
     }
 };
 

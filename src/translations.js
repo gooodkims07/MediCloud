@@ -55,6 +55,10 @@ export const translations = {
             editTitle: '환자 정보 수정',
             editSubtitle: '기존 환자 정보 업데이트',
             updateBtn: '정보 수정하기',
+            zipCode: '우편번호',
+            address: '주소',
+            detailAddress: '상세 주소',
+            findAddress: '주소 찾기',
             generatingId: '번호 생성 중...',
         },
         auth: {
@@ -197,6 +201,10 @@ export const translations = {
             editTitle: 'Edit Patient Information',
             editSubtitle: 'Update existing patient details',
             updateBtn: 'Update Patient',
+            zipCode: 'Zip Code',
+            address: 'Address',
+            detailAddress: 'Detail Address',
+            findAddress: 'Find Address',
             generatingId: 'Generating ID...',
         },
         auth: {
