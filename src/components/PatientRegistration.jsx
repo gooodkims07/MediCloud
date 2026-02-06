@@ -23,10 +23,15 @@ const PatientRegistration = ({ language, t, onRegisterSuccess, initialData }) =>
     const [generating, setGenerating] = useState(!isEdit);
 
     useEffect(() => {
-        if (!isEdit) {
-            generateAutoChartId();
-        }
-        fetchCurrentUser();
+        const initData = async () => {
+            const tasks = [fetchCurrentUser()];
+            if (!isEdit) {
+                tasks.push(generateAutoChartId());
+            }
+            await Promise.all(tasks);
+        };
+
+        initData();
 
         // Daum Postcode API 스크립트 로드
         const script = document.createElement('script');

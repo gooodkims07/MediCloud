@@ -55,7 +55,7 @@ const Signup = ({ onSwitchToLogin, t }) => {
                 </div>
 
                 <form style={styles.form} onSubmit={handleSignup}>
-                    {error && <div style={styles.errorBanner}>{error}</div>}
+                    {error ? <div style={styles.errorBanner}>{error}</div> : null}
 
                     <div style={styles.inputGroup}>
                         <label style={styles.label}>{t.auth.name}</label>

@@ -45,7 +45,7 @@ const ProfileEdit = ({ profile, onSave, onCancel, t }) => {
                 </div>
 
                 <form onSubmit={handleSubmit} style={styles.form}>
-                    {error && <div style={styles.errorBanner}>{error}</div>}
+                    {error ? <div style={styles.errorBanner}>{error}</div> : null}
 
                     <div style={styles.inputGroup}>
                         <label style={styles.label}>{t.auth.name}</label>

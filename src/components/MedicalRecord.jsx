@@ -350,7 +350,7 @@ const MedicalRecord = ({ activePatient, savedRecords = [], setSavedRecords, sele
                                 </div>
                             ))}
                         </div>
-                        {isListening.soap && <div style={styles.listeningHint}>🎙️ {t.medicalRecord.aiListening}</div>}
+                        {isListening.soap ? <div style={styles.listeningHint}>🎙️ {t.medicalRecord.aiListening}</div> : null}
 
                         <div style={styles.pdfFooter}>
                             <div style={styles.signatureArea}>

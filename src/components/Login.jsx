@@ -35,7 +35,7 @@ const Login = ({ onSwitchToSignup, t }) => {
                 </div>
 
                 <form style={styles.form} onSubmit={handleLogin}>
-                    {error && <div style={styles.errorBanner}>{error}</div>}
+                    {error ? <div style={styles.errorBanner}>{error}</div> : null}
 
                     <div style={styles.inputGroup}>
                         <label style={styles.label}>{t.auth.email}</label>
